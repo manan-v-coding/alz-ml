@@ -11,15 +11,20 @@ import matplotlib.pyplot as plt
 fake_file = False
 
 try:
-    regdata = pd.read_csv("ADNI-data/prediction_data2.csv")
+    regdata = pd.read_csv("ADNI-data/prediction_data3.csv")
     regdata.drop(['Unnamed: 0'], axis = 1, inplace = True)
     meds = pd.read_csv("ADNI-data/med_data3.csv")
 except FileNotFoundError:
     regdata = pd.read_csv("MMSE_fake.csv")
     meds = pd.read_csv("meds_fake.csv")
     fake_file = True
-regressor = RandomForestRegressor(random_state = 200,max_features=4, min_samples_split = 15,max_depth = 6,n_estimators = 80) 
-classifier = RandomForestClassifier(random_state = 108,max_features=3, min_samples_split = 10,max_depth = 5,n_estimators = 150,oob_score=True, min_samples_leaf = 5,class_weight='balanced_subsample')
+#regressor = RandomForestRegressor(random_state = 200,max_features=4, min_samples_split = 20,max_depth = 6,n_estimators = 200)
+regressor = RandomForestRegressor(random_state = 200,max_features=4, min_samples_split = 15,n_estimators = 120) 
+
+#classifier = RandomForestClassifier(random_state = 108,max_features=3, min_samples_split = 10,max_depth = 5,n_estimators = 150,oob_score=True, min_samples_leaf = 5,class_weight='balanced_subsample')
+#classifier=RandomForestClassifier(random_state = 108,max_features=3, min_samples_split = 20,max_depth = 5,n_estimators = 150,oob_score=True,class_weight='balanced_subsample')
+classifier = RandomForestClassifier(random_state = 108,max_features=4,n_estimators = 150,oob_score=True,class_weight='balanced_subsample')
+
 
 regdata1 = regdata.drop(['MMSE6',"MMSE12","MMSE24",'Kclusters'],axis=1)
 regdata = regdata[~regdata['PTID'].isin(['136_S_0873','007_S_0293','021_S_0424'])]
@@ -49,7 +54,7 @@ if page == "Predictive Model":
     st.subheader("Please enter the following information to the best of your ability:")
     st.write('Note: Remember to click enter after filling out each entry.')
     st.write("**Step 1: Basic Demographic Information**")
-    age = st.text_input("1. What is the patient's age?")
+    age = st.number_input("1. What is the patient's age?",value=round(regdata['Age'].mean()))
     input_dict['Age'] = age
     gender = st.selectbox("2. What is the patient's biological sex?",['Male','Female'])
     if gender == 'Male':
@@ -57,7 +62,7 @@ if page == "Predictive Model":
     else:
         input_dict['Male'] = 0
 
-    edu = st.text_input("3. How many years of formal education has the patient received (including grade school)?")
+    edu = st.number_input("3. How many years of formal education has the patient received (including grade school)?",value=round(regdata['PTEDUCAT'].mean()))
     input_dict['PTEDUCAT'] = edu
     if gender and age:
         #st.session_state['input'] = input_dict
@@ -80,7 +85,14 @@ if page == "Predictive Model":
         else:
             input_dict['card_issues'] = 0
 
-        brain = st.text_input("6. What is the patient's total brain volume?")
+        dis2 = st.radio("5. Does the patient have psychiatric issues:",['Yes','No'])
+
+        if 'Yes' in dis2:
+            input_dict['psych_issues'] = 1
+        else:
+            input_dict['psych_issues'] = 0
+
+        brain = st.number_input("6. What is the patient's total brain volume?",value=round(regdata['TOTAL_BRAIN'].mean()))
         input_dict['TOTAL_BRAIN'] = brain
 
         if dis and apoe:
@@ -88,39 +100,38 @@ if page == "Predictive Model":
         #if ('APOE_4' in st.session_state['input'].keys()) and ('card_issues' in st.session_state['input'].keys()): #and ('card_issues' in st.session_state['input'].keys()):
             st.markdown("---")
             st.write("**Step 3: Cognitive Score Prediction**") 
-            mmse1 = st.text_input("7. Most recent ADAS-Cog Score")
+            mmse1 = st.number_input("7. Most recent ADAS-Cog Score",value=round(regdata['MMSE_baseline'].mean()))
             input_dict['MMSE_baseline'] = mmse1 
             time = int(st.radio("8. Predict score after how many months?",[6,12,24]))
             #if mmse1:
-            if time and mmse1:
+            if time:
                 #st.session_state['input'] = input_dict
                 #st.session_state['time'] = time
             #if ('time' in st.session_state.keys()) and ('MMSE_baseline' in st.session_state['input'].keys()):
                 st.markdown("---")
-                for col in regdata1.drop(['PTID','Male','psych_issues'],axis=1).columns:
-                    if col in input_dict:
-                        values.append(float(input_dict[col]))
-                    else:
-                        values.append(0)
-                regressor.fit(regdata.dropna(subset=[f'MMSE{str(time)}']).drop(['MMSE6',"MMSE12","MMSE24",'Male','psych_issues','Kclusters','PTID'],axis=1), regdata[[f'MMSE{str(time)}']].dropna())
-                score = round(float(regressor.predict(np.array([values]))[0])*2)/2
-                if score <0:
-                    score = 0
-                elif score >85:
-                    score = 85
-                st.metric("Predicted Score:", str(score)+' Points','Change: ' +str(round((score -float(mmse1))*2)/2),delta_color="inverse")
-
+                if mmse1:
+                    for col in regdata1.drop(['PTID','psych_issues'],axis=1).columns:
+                        if col in input_dict:
+                            values.append(float(input_dict[col]))
+                        #else:
+                        #   values.append(0)
+                    regressor.fit(regdata.dropna(subset=[f'MMSE{str(time)}']).drop(['MMSE6',"MMSE12","MMSE24",'psych_issues','Kclusters','PTID'],axis=1), regdata[[f'MMSE{str(time)}']].dropna())
+                    score = round(float(regressor.predict(np.array([values]))[0])*2)/2
+                    if score <0:
+                        score = 0
+                    elif score >85:
+                        score = 85
+                    st.metric("Predicted Score:", str(score)+' Points','Change: ' +str(round((score -float(mmse1))*2)/2),delta_color="inverse")
+            
                 values1 = []
-                for col in regdata1.drop(['PTID'],axis=1).columns:
-                    if col in input_dict:
-                        values1.append(float(input_dict[col]))
-                    else:
-                        values1.append(0)
+                for col2 in regdata1.drop(['PTID'],axis=1).columns:
+                    if col2 in input_dict:
+                        values1.append(float(input_dict[col2]))
                 classifier.fit(regdata.drop(['MMSE6',"MMSE12","MMSE24",'Kclusters','PTID'],axis=1), regdata[['Kclusters']])
-                score = classifier.predict(np.array([values1]))[0]
+                score2 = classifier.predict(np.array([values1]))[0]
         
-                st.metric("Decline Rate Category:", str(score)+' Decliner')
-
+                st.metric("Decline Rate Category:",str(score2) +' Decliner')
+            
                 x = [0, 6, 12, 24]
                 y=[]
                 err = [0]
@@ -128,17 +139,16 @@ if page == "Predictive Model":
                     if type(val) == str:
                         y.append(float(mmse1))
                     else:
-                        regressor.fit(regdata.dropna(subset=[f'MMSE{str(val)}']).drop(['MMSE6',"MMSE12","MMSE24",'Male','psych_issues','Kclusters','PTID'],axis=1), regdata[[f'MMSE{str(val)}']].dropna())
+                        regressor.fit(regdata.dropna(subset=[f'MMSE{str(val)}']).drop(['MMSE6',"MMSE12","MMSE24",'psych_issues','Kclusters','PTID'],axis=1), regdata[[f'MMSE{str(val)}']].dropna())
                         score = round(float(regressor.predict(np.array([values]))[0]))
                         if score <0:
                             score = 0
                         elif score >85:
                             score = 85
                         y.append(score)
-                        if val != '_baseline':
-                            tree_preds = np.array([tree.predict(np.array([values]))[0] for tree in regressor.estimators_])
-                            interval = np.std(tree_preds, axis=0)*0.196
-                            err.append(interval)
+                        tree_preds = np.array([tree.predict(np.array([values]))[0] for tree in regressor.estimators_])
+                        interval = np.std(tree_preds, axis=0)*0.196
+                        err.append(interval)
                 fig, ax = plt.subplots()
                 ax.errorbar(x, y,yerr=err, label="ADAS-Cog")
                 ax.set_ylim(0,max(y)+8)
@@ -166,7 +176,7 @@ if page == "Predictive Model":
                         values.append(float(input_dict[col]))
                     else:
                         values.append(0)
-                for treatment in ['med_galantamine',"med_memantine",'med_rivastigmine','med_donepezil']:
+                for treatment in ['med_galantamine','med_rivastigmine','med_donepezil']:
                     log_x=regdata_train.drop(['PTID','med_galantamine',"med_memantine",'med_rivastigmine','med_donepezil'],axis=1)
                     log_x = pd.concat([log_x,regdata_train[treatment]],axis=1)
                     log_x = log_x[(log_x[treatment]==1) | (log_x['med_none']==0)]
@@ -238,9 +248,9 @@ else:
     st.write('''We used Alzheimer's Disease Neuroimaging Initiative( ADNI) data to train our machine learning model. ADNI is a longutitudinal study that has collected data
              for many years in order to capture long term trends in Alzheimer's disease progression. It is devoted to providing researchers around the world with 
              free, real-world, patient level data in order to expand the field of neuroscience. In order to make this model, ADNI data was cleaned and the needed features were
-             isolated and trained on a regression model. Afterwards, propensity score matching was utilized in order to ensure a fair comparison of the control and treated groups 
-             in the training dataset. This method matches treated patients with similar, untreated patients and compares the cognitive scores of both. This was done for every treatment. 
-             When a new patient enters their data, they are fitted on the trained model in order to predict their future ADAS-Cog score. They are also matched up with similar treated patients in
+             isolated and trained on a random forest regression model. Afterwards, propensity score matching was utilized in order to ensure a fair comparison of the control and treated groups 
+             in the training dataset. This method matches treated patients with similar, untreated patients and compares the cognitive scores of both, done for every treatment. 
+             When a new patient enters their data, they are fitted on the trained model in order to predict their future ADAS-Cog score and decline rate category. They are also matched up with similar treated patients in
              order to recommend a certain Alzheimer's treatment.
               ''')
 
