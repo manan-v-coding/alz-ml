@@ -52,7 +52,7 @@ if page == "Predictive Model":
              based on other parameters and comparing their scores. The treatment group with the lowest score is recommended to the patient. 
 ''')
     st.subheader("Please enter the following information to the best of your ability:")
-    st.write('Note: Remember to click enter after filling out each entry.')
+    st.write('Note: Remember to click enter after filling out each entry. The default values are averages of training data patients.')
     st.write("**Step 1: Basic Demographic Information**")
     age = st.number_input("1. What is the patient's age?",value=round(regdata['Age'].mean()))
     input_dict['Age'] = age
@@ -116,7 +116,7 @@ if page == "Predictive Model":
                         #else:
                         #   values.append(0)
                     regressor.fit(regdata.dropna(subset=[f'MMSE{str(time)}']).drop(['MMSE6',"MMSE12","MMSE24",'psych_issues','Kclusters','PTID'],axis=1), regdata[[f'MMSE{str(time)}']].dropna())
-                    score = round(float(regressor.predict(np.array([values]))[0])*2)/2
+                    score = round(float(regressor.predict(np.array([values]))[0]))
                     if score <0:
                         score = 0
                     elif score >85:
